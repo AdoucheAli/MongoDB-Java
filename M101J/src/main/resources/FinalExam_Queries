@@ -1,0 +1,127 @@
+# 1 
+# Construct a query to calculate the number of messages sent by Andrew Fastow, CFO, to Jeff Skilling, 
+# the president. Andrew Fastow's email addess was andrew.fastow@enron.com. Jeff Skilling's email was 
+# jeff.skilling@enron.com. 
+
+db.messages.aggregate([
+	{"$unwind":"$headers.To"},
+	{"$match":
+		{
+			"headers.To":"jeff.skilling@enron.com",
+			"headers.From":"andrew.fastow@enron.com"
+		}
+	},
+	{"$group":
+		{
+			"_id":"$headers.From",
+			"count":{"$sum":1}
+		}
+	}
+]);
+
+--Result
+{
+        "_id" : "andrew.fastow@enron.com",
+        "count" : 3
+}
+
+--Verification
+db.messages.find(
+	{
+		"headers.From":"andrew.fastow@enron.com",
+		"headers.To":{"$in":["jeff.skilling@enron.com"]}
+	},
+	{"headers.From":1,"headers.To":1}
+).pretty();
+
+--Result
+{
+        "_id" : ObjectId("4f16fdfcd1e2d3237106c4ff"),
+        "headers" : {
+                "From" : "andrew.fastow@enron.com",
+                "To" : [
+                        "jeff.skilling@enron.com"
+                ]
+        }
+}
+{
+        "_id" : ObjectId("4f16fdfcd1e2d3237106c574"),
+        "headers" : {
+                "From" : "andrew.fastow@enron.com",
+                "To" : [
+                        "jeff.skilling@enron.com"
+                ]
+        }
+}
+{
+        "_id" : ObjectId("4f16fdfed1e2d3237106ccb3"),
+        "headers" : {
+                "From" : "andrew.fastow@enron.com",
+                "To" : [
+                        "jeff.skilling@enron.com"
+                ]
+        }
+}
+-----------------------------------------------------------------
+
+#2 => Which pair of people have the greatest number of messages in the dataset?
+
+db.messages.aggregate([
+	{"$unwind":"$headers.To"},
+	{"$project":
+		{
+			"id":"$_id",
+			"from":"$headers.From",
+			"to":"$headers.To",
+			"_id":0
+		}
+	},
+	{"$group":
+		{
+			"_id":{"id":"$id","from":"$from"},
+			"toUniqueList":{"$addToSet":"$to"}
+		}
+	},
+	{"$unwind":"$toUniqueList"},
+	{"$group":
+		{
+			"_id":{"from":"$_id.from","to":"$toUniqueList"},
+			"count":{"$sum":1}
+		}
+	},
+	{"$sort":{"count":-1}},
+	{"$limit":5}
+]);
+
+--Result
+ {
+         "_id" : {
+                 "from" : "susan.mara@enron.com",
+                 "to" : "jeff.dasovich@enron.com"
+         },
+         "count" : 750
+ }
+ 
+--Verification
+db.messages.count(
+	{
+		"headers.From":"susan.mara@enron.com",
+		"headers.To":{"$in":["jeff.dasovich@enron.com"]}
+	}
+)
+750
+db.messages.count(
+	{
+		"headers.From":"jeff.dasovich@enron.com",
+		"headers.To":{"$in":["susan.mara@enron.com"]}
+	}
+)
+--
+0
+-----------------------------------------------------------------
+
+# 3
+
+db.messages.update({"headers.Message-ID":"<8147308.1075851042335.JavaMail.evans@thyme>"},{"$push":{"headers.To":"mrpotatohead@10gen.com"}})
+
+db.messages.find({"headers.Message-ID":"<8147308.1075851042335.JavaMail.evans@thyme>"},{"headers":1})
